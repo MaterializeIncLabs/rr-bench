@@ -46,17 +46,17 @@ pub trait Benchmark<'a>: Send {
 /// in a benchmarking environment. This trait includes methods for retrieving random IDs from
 /// various tables and executing operations such as inserts, updates, or deletes.
 pub trait PrimaryDatabase: Send {
-    fn get_random_customer_id(&mut self) -> Result<u64>;
+    fn get_random_customer_id(&mut self) -> Result<i32>;
 
-    fn get_random_account_id(&mut self) -> Result<u64>;
+    fn get_random_account_id(&mut self) -> Result<i32>;
 
-    fn get_random_security_id(&mut self) -> Result<u64>;
+    fn get_random_security_id(&mut self) -> Result<i32>;
 
-    fn get_random_trade_id(&mut self) -> Result<u64>;
+    fn get_random_trade_id(&mut self) -> Result<i32>;
 
-    fn get_random_order_id(&mut self) -> Result<u64>;
+    fn get_random_order_id(&mut self) -> Result<i32>;
 
-    fn get_random_market_data_id(&mut self) -> Result<u64>;
+    fn get_random_market_data_id(&mut self) -> Result<i32>;
 
     fn get_random_sector(&mut self) -> Result<String>;
 
@@ -68,7 +68,7 @@ pub trait PrimaryDatabase: Send {
 /// read operations that are typical in OLTP systems, such as fetching customer portfolios
 /// or querying market data.
 pub trait ReadReplica: Send {
-    fn customer_portfolio(&mut self, customer_id: u64) -> Result<()>;
+    fn customer_portfolio(&mut self, customer_id: i32) -> Result<()>;
 
     fn top_performers(&mut self) -> Result<()>;
 
@@ -76,13 +76,13 @@ pub trait ReadReplica: Send {
 
     fn recent_large_trades(&mut self) -> Result<()>;
 
-    fn customer_order_book(&mut self, customer_id: u64) -> Result<()>;
+    fn customer_order_book(&mut self, customer_id: i32) -> Result<()>;
 
     fn sector_performance(&mut self, sector: String) -> Result<()>;
 
-    fn account_activity_summary(&mut self, account_id: u64) -> Result<()>;
+    fn account_activity_summary(&mut self, account_id: i32) -> Result<()>;
 
-    fn daily_market_movements(&mut self, security_id: u64) -> Result<()>;
+    fn daily_market_movements(&mut self, security_id: i32) -> Result<()>;
 
     fn high_value_customers(&mut self) -> Result<()>;
 
@@ -92,9 +92,9 @@ pub trait ReadReplica: Send {
 
     fn top_securities_by_sector(&mut self, sector: String) -> Result<()>;
 
-    fn recent_trades_by_account(&mut self, account_id: u64) -> Result<()>;
+    fn recent_trades_by_account(&mut self, account_id: i32) -> Result<()>;
 
-    fn order_fulfillment_rates(&mut self, customer_id: u64) -> Result<()>;
+    fn order_fulfillment_rates(&mut self, customer_id: i32) -> Result<()>;
 
     fn sector_order_activity(&mut self, sector: String) -> Result<()>;
 

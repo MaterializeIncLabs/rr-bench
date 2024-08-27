@@ -4,10 +4,10 @@ pub enum Operation {
         address: String,
     },
     InsertAccount {
-        customer_id: u64,
+        customer_id: i32,
         account_type: String,
         balance: f64,
-        parent_account_id: Option<u64>,
+        parent_account_id: Option<i32>,
     },
     InsertSecurity {
         ticker: String,
@@ -15,67 +15,67 @@ pub enum Operation {
         sector: String,
     },
     InsertTrade {
-        account_id: u64,
-        security_id: u64,
+        account_id: i32,
+        security_id: i32,
         trade_type: String,
         quantity: i32,
         price: f64,
-        parent_trade_id: Option<u64>,
+        parent_trade_id: Option<i32>,
     },
     InsertOrder {
-        account_id: u64,
-        security_id: u64,
+        account_id: i32,
+        security_id: i32,
         order_type: String,
         quantity: i32,
         limit_price: f64,
         status: String,
-        parent_order_id: Option<u64>,
+        parent_order_id: Option<i32>,
     },
     InsertMarketData {
-        security_id: u64,
+        security_id: i32,
         price: f64,
         volume: i32,
     },
 
     UpdateCustomer {
-        customer_id: u64,
+        customer_id: i32,
         address: String,
     },
     UpdateAccount {
-        account_id: u64,
+        account_id: i32,
         balance: f64,
     },
     UpdateTrade {
-        trade_id: u64,
+        trade_id: i32,
         price: f64,
     },
     UpdateOrder {
-        order_id: u64,
+        order_id: i32,
         status: String,
         limit_price: f64,
     },
     UpdateMarketData {
-        market_data_id: u64,
+        market_data_id: i32,
         price: f64,
         volume: f64,
     },
 
     DeleteCustomer {
-        customer_id: u64,
+        customer_id: i32,
     },
     DeleteAccount {
-        account_id: u64,
+        account_id: i32,
     },
     DeleteSecurity {
-        security_id: u64,
+        security_id: i32,
     },
     DeleteTrade {
-        trade_id: u64,
+        trade_id: i32,
     },
     DeleteOrder {
-        order_id: u64,
+        order_id: i32,
     },
     DeleteMarketData {
-        market_data_id: u64,
+        market_data_id: i32,
     },
 }

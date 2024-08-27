@@ -34,7 +34,7 @@ struct Cli {
 
 #[derive(Serialize)]
 struct Customer {
-    customer_id: i64,
+    customer_id: i32,
     name: String,
     address: Option<String>,
     created_at: String,
@@ -42,8 +42,8 @@ struct Customer {
 
 #[derive(Serialize)]
 struct Account {
-    account_id: i64,
-    customer_id: i64,
+    account_id: i32,
+    customer_id: i32,
     account_type: String,
     balance: f64,
     created_at: String,
@@ -51,7 +51,7 @@ struct Account {
 
 #[derive(Serialize)]
 struct Security {
-    security_id: i64,
+    security_id: i32,
     ticker: String,
     name: Option<String>,
     sector: Option<String>,
@@ -60,9 +60,9 @@ struct Security {
 
 #[derive(Serialize)]
 struct Trade {
-    trade_id: i64,
-    account_id: i64,
-    security_id: i64,
+    trade_id: i32,
+    account_id: i32,
+    security_id: i32,
     trade_type: String,
     quantity: i32,
     price: f64,
@@ -71,9 +71,9 @@ struct Trade {
 
 #[derive(Serialize)]
 struct Order {
-    order_id: i64,
-    account_id: i64,
-    security_id: i64,
+    order_id: i32,
+    account_id: i32,
+    security_id: i32,
     order_type: String,
     quantity: i32,
     limit_price: Option<f64>,
@@ -83,8 +83,8 @@ struct Order {
 
 #[derive(Serialize)]
 struct MarketData {
-    market_data_id: i64,
-    security_id: i64,
+    market_data_id: i32,
+    security_id: i32,
     price: f64,
     volume: i32,
     market_date: String,
@@ -101,7 +101,7 @@ fn get_db_size(conn: &mut Connection) -> u64 {
     page_count * page_size
 }
 
-fn get_random_ids(tx: &Transaction, table: &str, column: &str, num: usize) -> Vec<i64> {
+fn get_random_ids(tx: &Transaction, table: &str, column: &str, num: usize) -> Vec<i32> {
     let query = format!(
         "SELECT {} FROM {} ORDER BY my_random() LIMIT {}",
         column, table, num
@@ -468,7 +468,7 @@ fn main() -> Result<()> {
     let mut sqlite_rng = StdRng::seed_from_u64(seed);
 
     conn.create_scalar_function("my_random", 0, FunctionFlags::SQLITE_UTF8, move |_| {
-        Ok(sqlite_rng.gen::<i64>())
+        Ok(sqlite_rng.gen::<i32>())
     })?;
 
     let mut generator = Generator {

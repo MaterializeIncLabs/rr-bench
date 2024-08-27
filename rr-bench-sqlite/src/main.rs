@@ -12,6 +12,10 @@ struct SQLiteBenchmark {
     config: Config,
 }
 
+struct SQLiteConnection {
+    conn: Connection,
+}
+
 impl SQLiteBenchmark {
     fn new(config: Config) -> Self {
         Self { config }
@@ -19,31 +23,27 @@ impl SQLiteBenchmark {
 }
 
 impl Benchmark<'_> for SQLiteBenchmark {
-    type Writer = SQLiteWriter;
-    type Reader = SQLiteReader;
+    type Writer = SQLiteConnection;
+    type Reader = SQLiteConnection;
 
-    fn primary_database(&mut self) -> Result<Self::Writer> {
+    fn primary_database(&self) -> Result<Self::Writer> {
         let path = self
             .config
             .get("dbpath")
             .context("missing requirement parameter dbpath")?;
-        SQLiteWriter::new(path)
+        SQLiteConnection::new(path)
     }
 
-    fn read_replica(&mut self) -> Result<Self::Reader> {
+    fn read_replica(&self) -> Result<Self::Reader> {
         let path = self
             .config
             .get("dbpath")
             .context("missing requirement parameter dbpath")?;
-        SQLiteReader::new(path)
+        SQLiteConnection::new(path)
     }
 }
 
-struct SQLiteWriter {
-    conn: Connection,
-}
-
-impl SQLiteWriter {
+impl SQLiteConnection {
     fn new(db: &str) -> Result<Self> {
         let conn = Connection::open(db).context("failed to open SQLite database")?;
         conn.pragma_update(None, "journal_mode", "WAL")
@@ -53,8 +53,8 @@ impl SQLiteWriter {
     }
 }
 
-impl PrimaryDatabase for SQLiteWriter {
-    fn get_random_customer_id(&mut self) -> Result<u64> {
+impl PrimaryDatabase for SQLiteConnection {
+    fn get_random_customer_id(&mut self) -> Result<i32> {
         self.conn
             .query_row(
                 "SELECT customer_id FROM customers ORDER BY random() LIMIT 1",
@@ -64,7 +64,7 @@ impl PrimaryDatabase for SQLiteWriter {
             .context("failed to retrieve customer_id")
     }
 
-    fn get_random_account_id(&mut self) -> Result<u64> {
+    fn get_random_account_id(&mut self) -> Result<i32> {
         self.conn
             .query_row(
                 "SELECT account_id FROM accounts ORDER BY random() LIMIT 1",
@@ -74,7 +74,7 @@ impl PrimaryDatabase for SQLiteWriter {
             .context("failed to retrieve account_id")
     }
 
-    fn get_random_security_id(&mut self) -> Result<u64> {
+    fn get_random_security_id(&mut self) -> Result<i32> {
         self.conn
             .query_row(
                 "SELECT security_id FROM securities ORDER BY random() LIMIT 1",
@@ -84,7 +84,7 @@ impl PrimaryDatabase for SQLiteWriter {
             .context("failed to retrieve security_id")
     }
 
-    fn get_random_trade_id(&mut self) -> Result<u64> {
+    fn get_random_trade_id(&mut self) -> Result<i32> {
         self.conn
             .query_row(
                 "SELECT trade_id FROM trades ORDER BY random() LIMIT 1",
@@ -94,7 +94,7 @@ impl PrimaryDatabase for SQLiteWriter {
             .context("failed to retrieve trade_id")
     }
 
-    fn get_random_order_id(&mut self) -> Result<u64> {
+    fn get_random_order_id(&mut self) -> Result<i32> {
         self.conn
             .query_row(
                 "SELECT order_id FROM orders ORDER BY random() LIMIT 1",
@@ -104,7 +104,7 @@ impl PrimaryDatabase for SQLiteWriter {
             .context("failed to retrieve order_id")
     }
 
-    fn get_random_market_data_id(&mut self) -> Result<u64> {
+    fn get_random_market_data_id(&mut self) -> Result<i32> {
         self.conn
             .query_row(
                 "SELECT market_data_id FROM market_data ORDER BY random() LIMIT 1",
@@ -124,7 +124,7 @@ impl PrimaryDatabase for SQLiteWriter {
             .context("failed to retrieve sector")
     }
 
-    fn execute_command(&mut self, op: Operation) -> Result<()> {
+    fn execute_command(&self, op: Operation) -> Result<()> {
         match op {
             Operation::InsertCustomer { name, address } => self.conn.execute(
                 "INSERT INTO customers (name, address) VALUES (?1, ?2)", params![name, address])
@@ -214,22 +214,8 @@ impl PrimaryDatabase for SQLiteWriter {
     }
 }
 
-struct SQLiteReader {
-    conn: Connection,
-}
-
-impl SQLiteReader {
-    fn new(db: &str) -> Result<Self> {
-        let conn = Connection::open(db).context("failed to open SQLite database")?;
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .context("failed to enable WAL")?;
-
-        Ok(Self { conn })
-    }
-}
-
-impl ReadReplica for SQLiteReader {
-    fn customer_portfolio(&mut self, customer_id: u64) -> Result<()> {
+impl ReadReplica for SQLiteConnection {
+    fn customer_portfolio(&mut self, customer_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM customer_portfolio WHERE customer_id = ?1")
@@ -264,7 +250,7 @@ impl ReadReplica for SQLiteReader {
             .with_context(|| "failed to query recent_large_trades".to_string())
     }
 
-    fn customer_order_book(&mut self, customer_id: u64) -> Result<()> {
+    fn customer_order_book(&mut self, customer_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM customer_order_book WHERE customer_id = ?1")
@@ -284,7 +270,7 @@ impl ReadReplica for SQLiteReader {
             .with_context(|| "failed to query sector_performance".to_string())
     }
 
-    fn account_activity_summary(&mut self, account_id: u64) -> Result<()> {
+    fn account_activity_summary(&mut self, account_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM account_activity_summary WHERE account_id = ?1")
@@ -294,7 +280,7 @@ impl ReadReplica for SQLiteReader {
             .with_context(|| format!("failed to query account_activity_summary {account_id}"))
     }
 
-    fn daily_market_movements(&mut self, security_id: u64) -> Result<()> {
+    fn daily_market_movements(&mut self, security_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM daily_market_movements WHERE security_id = ?1")
@@ -344,7 +330,7 @@ impl ReadReplica for SQLiteReader {
             .with_context(|| "failed to query top_securities_by_sector".to_string())
     }
 
-    fn recent_trades_by_account(&mut self, account_id: u64) -> Result<()> {
+    fn recent_trades_by_account(&mut self, account_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM recent_trades_by_account WHERE account_id = ?1")
@@ -354,7 +340,7 @@ impl ReadReplica for SQLiteReader {
             .with_context(|| format!("failed to query recent_trades_by_account {account_id}"))
     }
 
-    fn order_fulfillment_rates(&mut self, customer_id: u64) -> Result<()> {
+    fn order_fulfillment_rates(&mut self, customer_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM order_fulfillment_rates WHERE customer_id = ?1")
