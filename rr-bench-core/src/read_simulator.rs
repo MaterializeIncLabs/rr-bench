@@ -14,6 +14,9 @@ pub fn simulate_reader_connection<R: ReadReplica, P: PrimaryDatabase>(
     let start = Instant::now();
     let mut iter = (0..=15).cycle();
 
+    let mut reader = reader;
+    let mut primary = primary;
+
     while start.elapsed() < duration {
         let measurement = match iter.next().unwrap() {
             0 => {

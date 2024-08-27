@@ -46,19 +46,19 @@ pub trait Benchmark<'a>: Send {
 /// in a benchmarking environment. This trait includes methods for retrieving random IDs from
 /// various tables and executing operations such as inserts, updates, or deletes.
 pub trait PrimaryDatabase: Send {
-    fn get_random_customer_id(&self) -> Result<u64>;
+    fn get_random_customer_id(&mut self) -> Result<u64>;
 
-    fn get_random_account_id(&self) -> Result<u64>;
+    fn get_random_account_id(&mut self) -> Result<u64>;
 
-    fn get_random_security_id(&self) -> Result<u64>;
+    fn get_random_security_id(&mut self) -> Result<u64>;
 
-    fn get_random_trade_id(&self) -> Result<u64>;
+    fn get_random_trade_id(&mut self) -> Result<u64>;
 
-    fn get_random_order_id(&self) -> Result<u64>;
+    fn get_random_order_id(&mut self) -> Result<u64>;
 
-    fn get_random_market_data_id(&self) -> Result<u64>;
+    fn get_random_market_data_id(&mut self) -> Result<u64>;
 
-    fn get_random_sector(&self) -> Result<String>;
+    fn get_random_sector(&mut self) -> Result<String>;
 
     fn execute_command(&self, op: Operation) -> Result<()>;
 }
@@ -68,37 +68,37 @@ pub trait PrimaryDatabase: Send {
 /// read operations that are typical in OLTP systems, such as fetching customer portfolios
 /// or querying market data.
 pub trait ReadReplica: Send {
-    fn customer_portfolio(&self, customer_id: u64) -> Result<()>;
+    fn customer_portfolio(&mut self, customer_id: u64) -> Result<()>;
 
-    fn top_performers(&self) -> Result<()>;
+    fn top_performers(&mut self) -> Result<()>;
 
-    fn market_overview(&self) -> Result<()>;
+    fn market_overview(&mut self) -> Result<()>;
 
-    fn recent_large_trades(&self) -> Result<()>;
+    fn recent_large_trades(&mut self) -> Result<()>;
 
-    fn customer_order_book(&self, customer_id: u64) -> Result<()>;
+    fn customer_order_book(&mut self, customer_id: u64) -> Result<()>;
 
-    fn sector_performance(&self, sector: String) -> Result<()>;
+    fn sector_performance(&mut self, sector: String) -> Result<()>;
 
-    fn account_activity_summary(&self, account_id: u64) -> Result<()>;
+    fn account_activity_summary(&mut self, account_id: u64) -> Result<()>;
 
-    fn daily_market_movements(&self, security_id: u64) -> Result<()>;
+    fn daily_market_movements(&mut self, security_id: u64) -> Result<()>;
 
-    fn high_value_customers(&self) -> Result<()>;
+    fn high_value_customers(&mut self) -> Result<()>;
 
-    fn pending_orders_summary(&self) -> Result<()>;
+    fn pending_orders_summary(&mut self) -> Result<()>;
 
-    fn trade_volume_by_hour(&self) -> Result<()>;
+    fn trade_volume_by_hour(&mut self) -> Result<()>;
 
-    fn top_securities_by_sector(&self, sector: String) -> Result<()>;
+    fn top_securities_by_sector(&mut self, sector: String) -> Result<()>;
 
-    fn recent_trades_by_account(&self, account_id: u64) -> Result<()>;
+    fn recent_trades_by_account(&mut self, account_id: u64) -> Result<()>;
 
-    fn order_fulfillment_rates(&self, customer_id: u64) -> Result<()>;
+    fn order_fulfillment_rates(&mut self, customer_id: u64) -> Result<()>;
 
-    fn sector_order_activity(&self, sector: String) -> Result<()>;
+    fn sector_order_activity(&mut self, sector: String) -> Result<()>;
 
-    fn cascading_order_cancellation_alert(&self) -> Result<()>;
+    fn cascading_order_cancellation_alert(&mut self) -> Result<()>;
 }
 
 /// The `benchmark` function runs a benchmarking test using the provided function to create a `Benchmark` instance.
