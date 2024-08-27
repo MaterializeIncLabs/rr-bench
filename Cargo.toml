@@ -2,4 +2,5 @@
 resolver = "2"
 members = [
   "rr-bench-core",
-  "rr-bench-sqlite"]
+  "rr-bench-sqlite",
+  "rr-data-gen"]

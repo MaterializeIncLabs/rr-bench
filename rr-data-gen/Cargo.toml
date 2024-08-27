@@ -1,0 +1,15 @@
+[package]
+name = "rr-data-gen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.16", features = ["derive"] }
+csv = "1.3.0"
+fake = "2.9.2"
+indicatif = "0.17.8"
+rand = "0.8.5"
+rusqlite = { version = "0.32.1", features = ["functions"] }
+serde = { version = "1.0.209", features = ["derive"] }
+uuid = { version = "1.10.0", features = ["v4"] }
