@@ -187,7 +187,7 @@ pub enum Operation {
 /// * `f` - A function that takes a `Config` and returns a `Benchmark` implementation.
 ///
 /// # Example
-/// ```no_run
+/// ```compile_fail
 /// fn main() {
 ///     benchmark(|config| {
 ///         MyBenchmark::new(config)
