@@ -36,6 +36,6 @@ pub struct CompletionTracker {
 
 impl CompletionTracker {
     pub fn is_done(&self) -> bool {
-        self.count.load(Ordering::Relaxed) == 0
+        self.count.load(Ordering::SeqCst) == 0
     }
 }

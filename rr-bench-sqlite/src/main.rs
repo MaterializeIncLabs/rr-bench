@@ -114,6 +114,16 @@ impl PrimaryDatabase for SQLiteConnection {
             .context("failed to retrieve trade_id")
     }
 
+    fn get_random_ticker(&mut self) -> Result<String> {
+        self.conn
+            .query_row(
+                "SELECT ticker FROM tickers ORDER BY random() LIMIT 1",
+                [],
+                |row| row.get("ticker"),
+            )
+            .context("failed to retrieve ticker")
+    }
+
     fn get_random_sector(&mut self) -> Result<String> {
         self.conn
             .query_row(
@@ -233,19 +243,22 @@ impl ReadReplica for SQLiteConnection {
             .with_context(|| "failed to query top_performers".to_string())
     }
 
-    fn market_overview(&mut self) -> Result<()> {
-        let mut stmt = self.conn.prepare("SELECT * FROM market_overview").unwrap();
-        stmt.query(params![])
+    fn market_overview(&mut self, sector: &str) -> Result<()> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT * FROM market_overview WHERE sector = ?1")
+            .unwrap();
+        stmt.query(params![sector])
             .map(|_| ())
             .with_context(|| "failed to query market_overview".to_string())
     }
 
-    fn recent_large_trades(&mut self) -> Result<()> {
+    fn recent_large_trades(&mut self, account_id: i32) -> Result<()> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM recent_large_trades")
+            .prepare("SELECT * FROM recent_large_trades WHERE account_id = ?1")
             .unwrap();
-        stmt.query(params![])
+        stmt.query(params![account_id])
             .map(|_| ())
             .with_context(|| "failed to query recent_large_trades".to_string())
     }
@@ -300,12 +313,12 @@ impl ReadReplica for SQLiteConnection {
             .with_context(|| "failed to query high_value_customers".to_string())
     }
 
-    fn pending_orders_summary(&mut self) -> Result<()> {
+    fn pending_orders_summary(&mut self, ticker: &str) -> Result<()> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM pending_orders_summary")
+            .prepare("SELECT * FROM pending_orders_summary WHERE ticker = ?1")
             .unwrap();
-        stmt.query(params![])
+        stmt.query(params![ticker])
             .map(|_| ())
             .with_context(|| "failed to query pending_orders_summary".to_string())
     }

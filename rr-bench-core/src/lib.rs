@@ -5,20 +5,21 @@ pub use crate::config::Config;
 use crate::measurements::Measurements;
 use crate::operations::Operation;
 use crate::primary_simulator::PrimarySimulator;
-use crate::read_simulator::simulate_reader_connection;
+use crate::read_simulator::ReaderSimulator;
 use crate::task_handle::new_task_handles;
 use anyhow::{Context, Result};
 use clap::Parser;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::process::exit;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod config;
 mod measurements;
 pub mod operations;
+mod pretty_duration;
 mod primary_simulator;
 mod read_simulator;
 mod task_handle;
@@ -58,6 +59,8 @@ pub trait PrimaryDatabase: Send {
 
     fn get_random_market_data_id(&mut self) -> Result<i32>;
 
+    fn get_random_ticker(&mut self) -> Result<String>;
+
     fn get_random_sector(&mut self) -> Result<String>;
 
     fn execute_command(&self, op: Operation) -> Result<()>;
@@ -72,9 +75,9 @@ pub trait ReadReplica: Send {
 
     fn top_performers(&mut self) -> Result<()>;
 
-    fn market_overview(&mut self) -> Result<()>;
+    fn market_overview(&mut self, sector: &str) -> Result<()>;
 
-    fn recent_large_trades(&mut self) -> Result<()>;
+    fn recent_large_trades(&mut self, account_id: i32) -> Result<()>;
 
     fn customer_order_book(&mut self, customer_id: i32) -> Result<()>;
 
@@ -86,7 +89,7 @@ pub trait ReadReplica: Send {
 
     fn high_value_customers(&mut self) -> Result<()>;
 
-    fn pending_orders_summary(&mut self) -> Result<()>;
+    fn pending_orders_summary(&mut self, ticker: &str) -> Result<()>;
 
     fn trade_volume_by_hour(&mut self) -> Result<()>;
 
@@ -145,12 +148,14 @@ where
             .context("failed to build primary database client")?;
 
         s.spawn(move || {
+            eprintln!("starting primary database simulator");
             let mut simulator =
                 PrimarySimulator::new(primary, cli.transactions_per_second, 42, tracker);
             if let Err(e) = simulator.run() {
                 eprintln!("{:?}", e);
                 exit(1)
             }
+            eprintln!("shutting down primary database simulator");
         });
 
         let (tx, rx) = mpsc::channel();
@@ -160,10 +165,14 @@ where
             humantime::format_duration(cli.duration)
         );
 
-        let duration = cli.duration;
+        let m = MultiProgress::new();
+        let style = ProgressStyle::default_bar()
+            .template("{msg} {wide_bar} {pos}/{len} [{elapsed_precise}] ETA: {eta_precise}")
+            .unwrap()
+            .progress_chars("#>-");
 
         println!("Spawning {} clients", cli.concurrency);
-        for _ in 0..cli.concurrency {
+        for i in 0..cli.concurrency {
             let secondary = benchmark
                 .primary_database()
                 .context("failed to build primary database client")?;
@@ -174,39 +183,33 @@ where
 
             let tx = tx.clone();
             let handle = handle.clone();
-            s.spawn(move || simulate_reader_connection(reader, secondary, duration, tx, handle));
+            let duration = cli.duration;
+
+            let pb = m.add(ProgressBar::new(duration.as_secs()));
+            pb.set_style(style.clone());
+            pb.set_message(format!("client {i}"));
+
+            s.spawn(move || {
+                let mut simulator =
+                    ReaderSimulator::new(reader, secondary, duration, tx, pb, handle);
+                if let Err(e) = simulator.run() {
+                    eprintln!("{:?}", e);
+                    exit(1)
+                };
+            });
         }
 
         drop(tx);
         drop(handle);
 
         let mut measurements = Measurements::new(cli.duration);
-        let pb = ProgressBar::new(cli.duration.as_secs());
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{wide_bar} {pos}/{len} [{elapsed_precise}] ETA: {eta_precise}")
-                .unwrap()
-                .progress_chars("#>-"),
-        );
-
-        let start = Instant::now();
-        let mut offset = Duration::from_secs(0);
-        while start.elapsed() < cli.duration {
+        loop {
             match rx.recv_timeout(Duration::from_secs(1)) {
                 Ok(duration) => measurements.push(duration),
                 Err(RecvTimeoutError::Disconnected) => break,
                 _ => {}
             }
-
-            let elapsed = start.elapsed();
-            let difference = elapsed.saturating_sub(offset).as_secs();
-            if difference > 0 {
-                pb.inc(elapsed.saturating_sub(offset).as_secs());
-                offset = elapsed
-            }
         }
-
-        pb.finish_with_message("Done");
         Ok(measurements)
     })
 }

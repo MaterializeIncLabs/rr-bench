@@ -1,3 +1,4 @@
+use crate::pretty_duration::PrettyDuration;
 use std::fmt;
 use std::time::Duration;
 
@@ -26,20 +27,20 @@ impl Measurements {
         self.total_transactions() as f64 / self.total_duration.as_secs_f64()
     }
 
-    pub fn max(&self) -> humantime::Duration {
+    pub fn max(&self) -> PrettyDuration {
         (*self.durations.iter().max().unwrap()).into()
     }
 
-    pub fn min(&self) -> humantime::Duration {
+    pub fn min(&self) -> PrettyDuration {
         (*self.durations.iter().min().unwrap()).into()
     }
 
-    pub fn average(&self) -> humantime::Duration {
+    pub fn average(&self) -> PrettyDuration {
         let total_duration: Duration = self.durations.iter().cloned().sum();
         (total_duration / self.total_transactions() as u32).into()
     }
 
-    pub fn median(&self) -> humantime::Duration {
+    pub fn median(&self) -> PrettyDuration {
         let mut sorted = self.durations.clone();
         sorted.sort();
 
@@ -53,7 +54,7 @@ impl Measurements {
         median.into()
     }
 
-    pub fn standard_deviation(&self) -> humantime::Duration {
+    pub fn standard_deviation(&self) -> PrettyDuration {
         let avg_secs: Duration = self.average().into();
         let avg_secs = avg_secs.as_secs_f64();
         let variance: f64 = self
@@ -70,15 +71,15 @@ impl Measurements {
         Duration::from_secs_f64(stddev_secs).into()
     }
 
-    pub fn percentile_95(&self) -> humantime::Duration {
+    pub fn percentile_95(&self) -> PrettyDuration {
         self.percentile(95)
     }
 
-    pub fn percentile_99(&self) -> humantime::Duration {
+    pub fn percentile_99(&self) -> PrettyDuration {
         self.percentile(95)
     }
 
-    pub fn percentile(&self, percentile: usize) -> humantime::Duration {
+    pub fn percentile(&self, percentile: usize) -> PrettyDuration {
         let mut sorted = self.durations.clone();
         sorted.sort();
 
