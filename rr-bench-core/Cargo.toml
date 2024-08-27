@@ -1,0 +1,12 @@
+[package]
+name = "rr-bench-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5.16", features = ["derive"] }
+fake = "2.9.2"
+humantime = "2.1.0"
+indicatif = "0.17.8"
+rand = "0.8.5"
