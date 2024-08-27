@@ -229,21 +229,28 @@ where
 
     let (tx, rx) = mpsc::channel();
 
-    let secondary = benchmark
-        .primary_database()
-        .context("failed to build primary database client")?;
-
-    let reader = benchmark
-        .read_replica()
-        .context("failed to build read replica client")?;
-
     println!(
         "Starting benchmark for {}",
         humantime::format_duration(cli.duration)
     );
 
     let duration = cli.duration;
-    thread::spawn(move || simulate_reader_connection(reader, secondary, duration, tx));
+
+    println!("Spawning {} clients", cli.concurrency);
+    for _ in 0..cli.concurrency {
+        let secondary = benchmark
+            .primary_database()
+            .context("failed to build primary database client")?;
+
+        let reader = benchmark
+            .read_replica()
+            .context("failed to build read replica client")?;
+
+        let tx = tx.clone();
+        thread::spawn(move || simulate_reader_connection(reader, secondary, duration, tx));
+    }
+
+    drop(tx);
 
     let mut measurements = Measurements::new(cli.duration);
     let pb = ProgressBar::new(cli.duration.as_secs());

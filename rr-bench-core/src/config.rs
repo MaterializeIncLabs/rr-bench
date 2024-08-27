@@ -15,13 +15,18 @@ impl Config {
 #[command(name = "rr-bench")]
 pub struct Cli {
     /// The duration of the benchmark (e.g., 10s, 5m, 1h)
-    #[arg(long, value_parser = parse_duration_str)]
+    #[arg(short, long, value_parser = parse_duration_str)]
     pub duration: Duration,
 
     /// The number of transactions per second
     /// to execute against the primary database.
     #[arg(long, default_value_t = 10)]
     pub transactions_per_second: u32,
+
+    /// The number of concurrent clients
+    /// to open against the read replica
+    #[arg(long, short, default_value_t = 1)]
+    pub concurrency: u32,
 
     /// Any flags passed at the end after --
     /// will be based to the benchmark as a config.
