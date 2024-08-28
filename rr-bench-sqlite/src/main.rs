@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
+use rr_bench_core::operations::Operation;
 use rr_bench_core::{benchmark, Config};
-use rr_bench_core::{Benchmark, Operation, PrimaryDatabase, ReadReplica};
+use rr_bench_core::{Benchmark, PrimaryDatabase, ReadReplica};
 use rusqlite::{params, Connection};
 
 fn main() {
-    benchmark(SQLiteBenchmark::new)
+    benchmark(|config| Ok(SQLiteBenchmark::new(config)))
 }
 
 struct SQLiteBenchmark {
@@ -17,7 +18,7 @@ impl SQLiteBenchmark {
     }
 }
 
-impl Benchmark for SQLiteBenchmark {
+impl Benchmark<'_> for SQLiteBenchmark {
     type Writer = SQLiteWriter;
     type Reader = SQLiteReader;
 

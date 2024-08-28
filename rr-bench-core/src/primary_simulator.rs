@@ -1,3 +1,4 @@
+use crate::task_handle::CompletionTracker;
 use crate::{Operation, PrimaryDatabase};
 use anyhow::{Context, Result};
 use fake::faker::address::raw::StreetName;
@@ -16,23 +17,31 @@ pub struct PrimarySimulator<DB: PrimaryDatabase> {
     db: DB,
     tps: u32,
     rng: StdRng,
+    completion_tracker: CompletionTracker,
 }
 
 impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
-    pub fn new(db: DB, tps: u32, seed: u64) -> Self {
+    pub fn new(db: DB, tps: u32, seed: u64, completion_tracker: CompletionTracker) -> Self {
         let rng = StdRng::seed_from_u64(seed);
-        PrimarySimulator { db, tps, rng }
+        PrimarySimulator {
+            db,
+            tps,
+            rng,
+            completion_tracker,
+        }
     }
 
     pub fn run(&mut self) -> Result<()> {
         let interval = Duration::from_secs(1) / self.tps;
-        loop {
+        while !self.completion_tracker.is_done() {
             let op = self.generate_operations()?;
             if let Err(e) = self.db.execute_command(op) {
                 return Err(e).context("failed to execute command");
             }
             sleep(interval);
         }
+
+        Ok(())
     }
 
     fn generate_operations(&mut self) -> Result<Operation> {

@@ -1,3 +1,4 @@
+use crate::task_handle::TaskHandle;
 use crate::{PrimaryDatabase, ReadReplica};
 use anyhow::{Context, Result};
 use std::sync::mpsc::Sender;
@@ -8,6 +9,7 @@ pub fn simulate_reader_connection<R: ReadReplica, P: PrimaryDatabase>(
     primary: P,
     duration: Duration,
     timings: Sender<Duration>,
+    _handle: TaskHandle,
 ) -> Result<()> {
     let start = Instant::now();
     let mut iter = (0..=15).cycle();

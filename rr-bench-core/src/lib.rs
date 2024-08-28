@@ -3,8 +3,10 @@
 use crate::config::Cli;
 pub use crate::config::Config;
 use crate::measurements::Measurements;
+use crate::operations::Operation;
 use crate::primary_simulator::PrimarySimulator;
 use crate::read_simulator::simulate_reader_connection;
+use crate::task_handle::new_task_handles;
 use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -16,20 +18,23 @@ use std::time::{Duration, Instant};
 
 mod config;
 mod measurements;
+pub mod operations;
 mod primary_simulator;
 mod read_simulator;
+mod task_handle;
 
 /// The `Benchmark` trait defines the interface for setting up a database benchmarking environment.
 /// Implementors of this trait are responsible for providing access to both the primary database
 /// and the read replica.
-pub trait Benchmark: Send {
-    type Writer: PrimaryDatabase + 'static;
+pub trait Benchmark<'a>: Send {
+    type Writer: PrimaryDatabase + 'a;
 
-    type Reader: ReadReplica + 'static;
+    type Reader: ReadReplica;
 
     /// Provides access to the primary database. This
-    /// method may be called multiple times.
-    fn primary_database(&self) -> Result<Self::Writer>;
+    /// method may be called multiple times but may utilize
+    /// connection pooling.
+    fn primary_database(&'a self) -> Result<Self::Writer>;
 
     /// Provides access to the read replica. This
     /// method may be called multiple times and should
@@ -55,7 +60,7 @@ pub trait PrimaryDatabase: Send {
 
     fn get_random_sector(&self) -> Result<String>;
 
-    fn execute_command(&self, cmds: Operation) -> Result<()>;
+    fn execute_command(&self, op: Operation) -> Result<()>;
 }
 
 /// The `ReadReplica` trait defines the interface for interacting with a read replica
@@ -96,88 +101,6 @@ pub trait ReadReplica: Send {
     fn cascading_order_cancellation_alert(&self) -> Result<()>;
 }
 
-pub enum Operation {
-    InsertCustomer {
-        name: String,
-        address: String,
-    },
-    InsertAccount {
-        customer_id: u64,
-        account_type: String,
-        balance: f64,
-        parent_account_id: Option<u64>,
-    },
-    InsertSecurity {
-        ticker: String,
-        name: String,
-        sector: String,
-    },
-    InsertTrade {
-        account_id: u64,
-        security_id: u64,
-        trade_type: String,
-        quantity: i32,
-        price: f64,
-        parent_trade_id: Option<u64>,
-    },
-    InsertOrder {
-        account_id: u64,
-        security_id: u64,
-        order_type: String,
-        quantity: i32,
-        limit_price: f64,
-        status: String,
-        parent_order_id: Option<u64>,
-    },
-    InsertMarketData {
-        security_id: u64,
-        price: f64,
-        volume: i32,
-    },
-
-    UpdateCustomer {
-        customer_id: u64,
-        address: String,
-    },
-    UpdateAccount {
-        account_id: u64,
-        balance: f64,
-    },
-    UpdateTrade {
-        trade_id: u64,
-        price: f64,
-    },
-    UpdateOrder {
-        order_id: u64,
-        status: String,
-        limit_price: f64,
-    },
-    UpdateMarketData {
-        market_data_id: u64,
-        price: f64,
-        volume: f64,
-    },
-
-    DeleteCustomer {
-        customer_id: u64,
-    },
-    DeleteAccount {
-        account_id: u64,
-    },
-    DeleteSecurity {
-        security_id: u64,
-    },
-    DeleteTrade {
-        trade_id: u64,
-    },
-    DeleteOrder {
-        order_id: u64,
-    },
-    DeleteMarketData {
-        market_data_id: u64,
-    },
-}
-
 /// The `benchmark` function runs a benchmarking test using the provided function to create a `Benchmark` instance.
 ///
 /// This function sets up the benchmarking environment, spawns threads to simulate primary database writes,
@@ -194,9 +117,9 @@ pub enum Operation {
 ///     });
 /// }
 /// ```
-pub fn benchmark<B: Benchmark, F>(f: F)
+pub fn benchmark<B: for<'a> Benchmark<'a>, F>(f: F)
 where
-    F: Fn(Config) -> B,
+    F: Fn(Config) -> Result<B>,
 {
     match inner(f) {
         Ok(measurements) => println!("{}", measurements),
@@ -207,77 +130,83 @@ where
     }
 }
 
-fn inner<B: Benchmark, F>(f: F) -> Result<Measurements>
+fn inner<B: for<'a> Benchmark<'a>, F>(f: F) -> Result<Measurements>
 where
-    F: Fn(Config) -> B,
+    F: Fn(Config) -> Result<B>,
 {
     let cli: Cli = Cli::parse();
+    let benchmark: B = f(cli.get_config())?;
 
-    let cli = cli.clone();
-    let benchmark = f(cli.get_config());
-    let primary = benchmark
-        .primary_database()
-        .context("failed to build primary database client")?;
+    let (handle, tracker) = new_task_handles();
 
-    thread::spawn(move || {
-        let mut simulator = PrimarySimulator::new(primary, cli.transactions_per_second, 42);
-        if let Err(e) = simulator.run() {
-            eprintln!("{:?}", e);
-            exit(1)
-        }
-    });
-
-    let (tx, rx) = mpsc::channel();
-
-    println!(
-        "Starting benchmark for {}",
-        humantime::format_duration(cli.duration)
-    );
-
-    let duration = cli.duration;
-
-    println!("Spawning {} clients", cli.concurrency);
-    for _ in 0..cli.concurrency {
-        let secondary = benchmark
+    thread::scope(|s| {
+        let primary = benchmark
             .primary_database()
             .context("failed to build primary database client")?;
 
-        let reader = benchmark
-            .read_replica()
-            .context("failed to build read replica client")?;
+        s.spawn(move || {
+            let mut simulator =
+                PrimarySimulator::new(primary, cli.transactions_per_second, 42, tracker);
+            if let Err(e) = simulator.run() {
+                eprintln!("{:?}", e);
+                exit(1)
+            }
+        });
 
-        let tx = tx.clone();
-        thread::spawn(move || simulate_reader_connection(reader, secondary, duration, tx));
-    }
+        let (tx, rx) = mpsc::channel();
 
-    drop(tx);
+        println!(
+            "Starting benchmark for {}",
+            humantime::format_duration(cli.duration)
+        );
 
-    let mut measurements = Measurements::new(cli.duration);
-    let pb = ProgressBar::new(cli.duration.as_secs());
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{wide_bar} {pos}/{len} [{elapsed_precise}] ETA: {eta_precise}")
-            .unwrap()
-            .progress_chars("#>-"),
-    );
+        let duration = cli.duration;
 
-    let start = Instant::now();
-    let mut offset = Duration::from_secs(0);
-    loop {
-        match rx.recv_timeout(Duration::from_secs(1)) {
-            Ok(duration) => measurements.push(duration),
-            Err(RecvTimeoutError::Disconnected) => break,
-            _ => {}
+        println!("Spawning {} clients", cli.concurrency);
+        for _ in 0..cli.concurrency {
+            let secondary = benchmark
+                .primary_database()
+                .context("failed to build primary database client")?;
+
+            let reader = benchmark
+                .read_replica()
+                .context("failed to build read replica client")?;
+
+            let tx = tx.clone();
+            let handle = handle.clone();
+            s.spawn(move || simulate_reader_connection(reader, secondary, duration, tx, handle));
         }
 
-        let elapsed = start.elapsed();
-        let difference = elapsed.saturating_sub(offset).as_secs();
-        if difference > 0 {
-            pb.inc(elapsed.saturating_sub(offset).as_secs());
-            offset = elapsed
-        }
-    }
+        drop(tx);
+        drop(handle);
 
-    pb.finish_with_message("Done");
-    Ok(measurements)
+        let mut measurements = Measurements::new(cli.duration);
+        let pb = ProgressBar::new(cli.duration.as_secs());
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{wide_bar} {pos}/{len} [{elapsed_precise}] ETA: {eta_precise}")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+
+        let start = Instant::now();
+        let mut offset = Duration::from_secs(0);
+        while start.elapsed() < cli.duration {
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(duration) => measurements.push(duration),
+                Err(RecvTimeoutError::Disconnected) => break,
+                _ => {}
+            }
+
+            let elapsed = start.elapsed();
+            let difference = elapsed.saturating_sub(offset).as_secs();
+            if difference > 0 {
+                pb.inc(elapsed.saturating_sub(offset).as_secs());
+                offset = elapsed
+            }
+        }
+
+        pb.finish_with_message("Done");
+        Ok(measurements)
+    })
 }
