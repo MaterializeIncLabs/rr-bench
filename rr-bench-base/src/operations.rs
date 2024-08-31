@@ -82,7 +82,7 @@ pub enum WriteOperation {
     },
 }
 
-#[derive(EnumIter)]
+#[derive(EnumIter, Debug, PartialEq)]
 pub enum ReadOperation {
     CustomerPortfolio,
     TopPerformers,
@@ -100,5 +100,3 @@ pub enum ReadOperation {
     OrderFulfillmentRates,
     SectorOrderActivity,
 }
-
-

@@ -11,4 +11,4 @@ pg_bigdecimal = "0.1.5"
 postgres = "0.19.8"
 postgres-openssl = "0.5.0"
 r2d2_postgres = "0.18.1"
-rr-bench-core = { path = "../rr-bench-core" }
+rr-bench-base = { path = "../rr-bench-base" }

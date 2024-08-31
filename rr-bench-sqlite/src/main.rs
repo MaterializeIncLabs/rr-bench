@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
-use rr_bench_core::benchmark;
-use rr_bench_core::clap::{Arg, ArgMatches};
-use rr_bench_core::operations::WriteOperation;
-use rr_bench_core::{Benchmark, PrimaryDatabase, ReadReplica};
+use rr_bench_base::benchmark;
+use rr_bench_base::clap::{Arg, ArgMatches};
+use rr_bench_base::operations::WriteOperation;
+use rr_bench_base::{Benchmark, PrimaryDatabase, ReadReplica};
 use rusqlite::{params, Connection};
 
 fn main() {

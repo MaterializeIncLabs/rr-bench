@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-rr-bench-core = { path = "../rr-bench-core" }
+rr-bench-base= { path = "../rr-bench-base" }
 rusqlite = "0.32.1"

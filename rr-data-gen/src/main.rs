@@ -22,7 +22,7 @@ const GIGABYTE: u64 = 1024 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
 struct Cli {
-    #[clap(long, default_value_t = NonZero::new(1).unwrap())]
+    #[clap(long, default_value_t = NonZeroU8::new(1).unwrap())]
     scale: NonZeroU8,
 
     #[clap(long)]

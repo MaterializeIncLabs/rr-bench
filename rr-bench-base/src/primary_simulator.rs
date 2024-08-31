@@ -1,5 +1,5 @@
 use crate::task_handle::TaskCompletion;
-use crate::{WriteOperation, PrimaryDatabase};
+use crate::{PrimaryDatabase, WriteOperation};
 use anyhow::{Context, Result};
 use fake::faker::address::raw::StreetName;
 use fake::faker::company::raw::{CompanyName, Industry};

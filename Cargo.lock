@@ -1019,7 +1019,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rr-bench-core"
+name = "rr-bench-base"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1043,7 +1043,7 @@ dependencies = [
  "postgres",
  "postgres-openssl",
  "r2d2_postgres",
- "rr-bench-core",
+ "rr-bench-base",
 ]
 
 [[package]]
@@ -1051,7 +1051,7 @@ name = "rr-bench-sqlite"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "rr-bench-core",
+ "rr-bench-base",
  "rusqlite",
 ]
 

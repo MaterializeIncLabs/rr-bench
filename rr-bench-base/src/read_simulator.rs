@@ -1,10 +1,10 @@
+use crate::operations::ReadOperation;
 use crate::task_handle::TaskHandle;
 use crate::{PrimaryDatabase, ReadReplica};
 use anyhow::Result;
 use indicatif::ProgressBar;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
-use crate::operations::ReadOperation;
 use strum::IntoEnumIterator;
 
 /// `ReaderSimulator` runs a series of read operations against a `ReadReplica`.
@@ -57,7 +57,7 @@ impl<R: ReadReplica, P: PrimaryDatabase> ReaderSimulator<R, P> {
                     let sector = self.primary.get_random_sector()?;
                     self.reader.market_overview(&sector)?
                 }
-                ReadOperation::RecentLargeTrades=> {
+                ReadOperation::RecentLargeTrades => {
                     let account_id = self.primary.get_random_account_id()?;
                     self.reader.recent_large_trades(account_id)?
                 }

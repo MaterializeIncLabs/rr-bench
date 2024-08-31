@@ -5,9 +5,9 @@ use postgres::Client;
 use postgres_openssl::MakeTlsConnector;
 use r2d2_postgres::r2d2::Pool;
 use r2d2_postgres::PostgresConnectionManager;
-use rr_bench_core::clap::{Arg, ArgMatches};
-use rr_bench_core::operations::WriteOperation;
-use rr_bench_core::{benchmark, Benchmark, PrimaryDatabase, ReadReplica};
+use rr_bench_base::clap::{Arg, ArgMatches};
+use rr_bench_base::operations::WriteOperation;
+use rr_bench_base::{benchmark, Benchmark, PrimaryDatabase, ReadReplica};
 
 fn main() {
     benchmark(
