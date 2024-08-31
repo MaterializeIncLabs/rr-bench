@@ -1,0 +1,8 @@
+[package]
+name = "rr-bench-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fake = "2.9.2"
+rand = "0.8.5"

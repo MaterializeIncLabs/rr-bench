@@ -4,4 +4,5 @@ members = [
     "rr-bench-base",
     "rr-bench-sqlite",
     "rr-bench-postgres",
-    "rr-data-gen"]
+    "rr-data-gen",
+    "rr-bench-core"]

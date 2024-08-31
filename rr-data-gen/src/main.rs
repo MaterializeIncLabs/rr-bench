@@ -1,14 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use fake::faker::address::raw::StreetName;
-use fake::faker::company::raw::{CompanyName, Industry};
-use fake::faker::name::raw::Name;
-use fake::locales::EN;
-use fake::Fake;
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::distributions::Alphanumeric;
-use rand::prelude::{SliceRandom, StdRng};
+use rand::prelude::StdRng;
 use rand::{thread_rng, Rng, SeedableRng};
+use rr_bench_core::DataGenerator;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::{params, Connection, Transaction};
 use serde::Serialize;
@@ -120,7 +115,7 @@ fn get_random_ids(tx: &Transaction, table: &str, column: &str, num: usize) -> Ve
 }
 
 struct Generator {
-    rng: StdRng,
+    gen: DataGenerator,
 }
 
 impl Generator {
@@ -131,11 +126,10 @@ impl Generator {
     ) -> rusqlite::Result<()> {
         let tx = conn.transaction()?;
         for _ in 0..batch_size {
-            let name: String = Name(EN).fake_with_rng(&mut self.rng);
-            let address: String = StreetName(EN).fake_with_rng(&mut self.rng);
+            let customer = self.gen.generate_customer();
             tx.execute(
                 "INSERT INTO customers (name, address) VALUES (?, ?);",
-                params![name, address],
+                params![customer.name, customer.address],
             )?;
         }
         tx.commit()?;
@@ -150,14 +144,10 @@ impl Generator {
         let tx = conn.transaction()?;
         let customer_ids = get_random_ids(&tx, "customers", "customer_id", batch_size);
         for customer_id in customer_ids {
-            let account_type = ["Savings", "Checking", "Brokerage", "Investment"]
-                .choose(&mut self.rng)
-                .unwrap()
-                .to_string();
-            let balance = self.rng.gen_range(0.0..10000.0);
+            let account = self.gen.generate_account();
             tx.execute(
                 "INSERT INTO accounts (customer_id, account_type, balance) VALUES (?, ?, ?);",
-                params![customer_id, account_type, balance],
+                params![customer_id, account.account_type, account.balance],
             )?;
         }
         tx.commit()?;
@@ -171,12 +161,10 @@ impl Generator {
     ) -> rusqlite::Result<()> {
         let tx = conn.transaction()?;
         for _ in 0..batch_size {
-            let ticker = ticker(&mut self.rng);
-            let name: String = CompanyName(EN).fake_with_rng(&mut self.rng);
-            let sector: String = Industry(EN).fake_with_rng(&mut self.rng);
+            let security = self.gen.generate_security();
             tx.execute(
                 "INSERT INTO securities (ticker, name, sector) VALUES (?, ?, ?);",
-                params![ticker, name, sector],
+                params![security.ticker, security.name, security.sector],
             )?;
         }
         tx.commit()?;
@@ -195,12 +183,10 @@ impl Generator {
         let ids = account_ids.iter().zip(security_ids);
 
         for (account_id, security_id) in ids {
-            let trade_type = ["buy", "sell"].choose(&mut self.rng).unwrap().to_string();
-            let quantity = self.rng.gen_range(1..1000);
-            let price = self.rng.gen_range(100.0..500.0);
+            let trade = self.gen.generate_trade();
             tx.execute(
             "INSERT INTO trades (account_id, security_id, trade_type, quantity, price) VALUES (?, ?, ?, ?, ?);",
-            params![account_id, security_id, trade_type, quantity, price],
+            params![account_id, security_id, trade.trade_type, trade.quantity, trade.price],
         )?;
         }
         tx.commit()?;
@@ -219,17 +205,10 @@ impl Generator {
         let ids = account_ids.iter().zip(security_ids);
 
         for (account_id, security_id) in ids {
-            let order_type = ["buy", "sell"].choose(&mut self.rng).unwrap().to_string();
-            let quantity = self.rng.gen_range(1..1000);
-            let limit_price = self.rng.gen_range(1..1000) as f64;
-            let status = ["pending", "completed", "canceled"]
-                .choose(&mut self.rng)
-                .unwrap()
-                .to_string();
+            let order = self.gen.generate_order();
             tx.execute(
             "INSERT INTO orders (account_id, security_id, order_type, quantity, limit_price, status) VALUES (?, ?, ?, ?, ?, ?);",
-            params![account_id, security_id, order_type, quantity, limit_price, status],
-        )?;
+            params![account_id, security_id, order.order_type, order.quantity, order.limit_price, order.status])?;
         }
         tx.commit()?;
         Ok(())
@@ -244,11 +223,10 @@ impl Generator {
         let security_ids = get_random_ids(&tx, "securities", "security_id", batch_size);
 
         for security_id in security_ids {
-            let price = self.rng.gen_range(100.0..500.0);
-            let volume = self.rng.gen_range(1000..100000);
+            let market_data = self.gen.generate_market_data();
             tx.execute(
                 "INSERT INTO market_data (security_id, price, volume) VALUES (?, ?, ?);",
-                params![security_id, price, volume],
+                params![security_id, market_data.price, market_data.volume],
             )?;
         }
         tx.commit()?;
@@ -316,10 +294,6 @@ fn export_to_csv<T: Serialize>(
 
     wtr.flush().unwrap();
     Ok(())
-}
-
-fn ticker<R: Rng + ?Sized>(rng: &mut R) -> String {
-    (0..4).map(|_| rng.sample(Alphanumeric) as char).collect()
 }
 
 // Helper functions to map database rows to Rust structs
@@ -472,7 +446,7 @@ fn main() -> Result<()> {
     })?;
 
     let mut generator = Generator {
-        rng: StdRng::seed_from_u64(seed),
+        gen: DataGenerator::new(seed),
     };
     generator.populate_database(&mut conn, cli.scale.get())?;
 

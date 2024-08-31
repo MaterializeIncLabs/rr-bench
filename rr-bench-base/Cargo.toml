@@ -6,9 +6,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 clap = { version = "4.5.16", features = ["derive"] }
-fake = "2.9.2"
 humantime = "2.1.0"
 indicatif = "0.17.8"
 rand = "0.8.5"
 strum = "0.26.3"
 strum_macros = "0.26.4"
+rr-bench-core = { path = "../rr-bench-core" }

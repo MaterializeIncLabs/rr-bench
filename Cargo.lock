@@ -1024,12 +1024,20 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "fake",
  "humantime",
  "indicatif",
  "rand",
+ "rr-bench-core",
  "strum",
  "strum_macros",
+]
+
+[[package]]
+name = "rr-bench-core"
+version = "0.1.0"
+dependencies = [
+ "fake",
+ "rand",
 ]
 
 [[package]]
@@ -1062,9 +1070,9 @@ dependencies = [
  "anyhow",
  "clap",
  "csv",
- "fake",
  "indicatif",
  "rand",
+ "rr-bench-core",
  "rusqlite",
  "serde",
  "uuid",

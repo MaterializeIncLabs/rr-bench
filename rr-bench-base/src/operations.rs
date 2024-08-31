@@ -38,7 +38,6 @@ pub enum WriteOperation {
         price: f64,
         volume: i32,
     },
-
     UpdateCustomer {
         customer_id: i32,
         address: String,
@@ -59,7 +58,7 @@ pub enum WriteOperation {
     UpdateMarketData {
         market_data_id: i32,
         price: f64,
-        volume: f64,
+        volume: i32,
     },
 
     DeleteCustomer {
