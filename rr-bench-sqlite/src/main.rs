@@ -1,15 +1,24 @@
 use anyhow::{Context, Result};
-use rr_bench_core::operations::Operation;
-use rr_bench_core::{benchmark, Config};
+use rr_bench_core::benchmark;
+use rr_bench_core::clap::{Arg, ArgMatches};
+use rr_bench_core::operations::WriteOperation;
 use rr_bench_core::{Benchmark, PrimaryDatabase, ReadReplica};
 use rusqlite::{params, Connection};
 
 fn main() {
-    benchmark(|config| Ok(SQLiteBenchmark::new(config)))
+    benchmark(
+        || {
+            [Arg::new("dbpath")
+                .long("db-path")
+                .required(true)
+                .help("The path to the SQLite database file")]
+        },
+        SQLiteBenchmark::new,
+    )
 }
 
 struct SQLiteBenchmark {
-    config: Config,
+    dbpath: String,
 }
 
 struct SQLiteConnection {
@@ -17,8 +26,13 @@ struct SQLiteConnection {
 }
 
 impl SQLiteBenchmark {
-    fn new(config: Config) -> Self {
-        Self { config }
+    fn new(matches: ArgMatches) -> Result<Self> {
+        Ok(Self {
+            dbpath: matches
+                .get_one::<String>("dbpath")
+                .context("missing required parameter db-path")?
+                .to_string(),
+        })
     }
 }
 
@@ -27,19 +41,11 @@ impl Benchmark<'_> for SQLiteBenchmark {
     type Reader = SQLiteConnection;
 
     fn primary_database(&self) -> Result<Self::Writer> {
-        let path = self
-            .config
-            .get("dbpath")
-            .context("missing requirement parameter dbpath")?;
-        SQLiteConnection::new(path)
+        SQLiteConnection::new(&self.dbpath)
     }
 
     fn read_replica(&self) -> Result<Self::Reader> {
-        let path = self
-            .config
-            .get("dbpath")
-            .context("missing requirement parameter dbpath")?;
-        SQLiteConnection::new(path)
+        SQLiteConnection::new(&self.dbpath)
     }
 }
 
@@ -134,13 +140,13 @@ impl PrimaryDatabase for SQLiteConnection {
             .context("failed to retrieve sector")
     }
 
-    fn execute_command(&self, op: Operation) -> Result<()> {
+    fn execute_command(&self, op: WriteOperation) -> Result<()> {
         match op {
-            Operation::InsertCustomer { name, address } => self.conn.execute(
+            WriteOperation::InsertCustomer { name, address } => self.conn.execute(
                 "INSERT INTO customers (name, address) VALUES (?1, ?2)", params![name, address])
                 .map(|_| ())
                 .context("failed to insert customer"),
-            Operation::InsertAccount { customer_id, account_type, balance, parent_account_id } => {
+            WriteOperation::InsertAccount { customer_id, account_type, balance, parent_account_id } => {
                 match parent_account_id {
                     None => {
                         self.conn.execute("INSERT INTO accounts (customer_id, account_type, balance) VALUES (?1, ?2, ?3)", params![customer_id, account_type, balance])
@@ -154,12 +160,12 @@ impl PrimaryDatabase for SQLiteConnection {
                     }
                 }
             }
-            Operation::InsertSecurity { ticker, name, sector } => {
+            WriteOperation::InsertSecurity { ticker, name, sector } => {
                 self.conn.execute("INSERT INTO securities (ticker, name, sector) VALUES (?1, ?2, ?3)", params![ticker, name, sector])
                     .map(|_| ())
                     .context("failed to insert security")
             }
-            Operation::InsertTrade { account_id, security_id, trade_type, quantity, price, parent_trade_id } => {
+            WriteOperation::InsertTrade { account_id, security_id, trade_type, quantity, price, parent_trade_id } => {
                 match parent_trade_id {
                     None =>
                         self.conn.execute("INSERT INTO trades (account_id, security_id, trade_type, quantity, price) VALUES (?1, ?2, ?3, ?4, ?5)", params![account_id, security_id, trade_type, quantity, price])
@@ -170,7 +176,7 @@ impl PrimaryDatabase for SQLiteConnection {
                         .context("failed to insert trades")
                 }
             }
-            Operation::InsertOrder { account_id, security_id, order_type, quantity, limit_price,  status, parent_order_id} => {
+            WriteOperation::InsertOrder { account_id, security_id, order_type, quantity, limit_price,  status, parent_order_id} => {
                 match parent_order_id  {
                     None => self.conn.execute("INSERT INTO orders (account_id, security_id, order_type, quantity, limit_price, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6)", params![account_id, security_id, order_type, quantity, limit_price, status])
                         .map(|_| ())
@@ -180,44 +186,44 @@ impl PrimaryDatabase for SQLiteConnection {
                         .context("failed to insert order"),
                 }
             }
-            Operation::InsertMarketData { security_id, price, volume } => self.conn.execute("INSERT INTO market_data (security_id, price, volume) VALUES (?1, ?2, ?3)", params![security_id, price, volume])
+            WriteOperation::InsertMarketData { security_id, price, volume } => self.conn.execute("INSERT INTO market_data (security_id, price, volume) VALUES (?1, ?2, ?3)", params![security_id, price, volume])
                 .map(|_| ())
                 .context("failed to insert market data"),
-            Operation::UpdateCustomer { customer_id, address } => self.conn.execute("UPDATE customers SET address = ?1 WHERE customer_id = ?2",params![address, customer_id])
+            WriteOperation::UpdateCustomer { customer_id, address } => self.conn.execute("UPDATE customers SET address = ?1 WHERE customer_id = ?2", params![address, customer_id])
                 .map(|_| ())
                 .context("failed to update customer"),
-            Operation::UpdateAccount { account_id, balance } => self.conn.execute("UPDATE accounts SET balance = ?1 WHERE customer_id = ?2",
-                                                                                  params![balance, account_id])
+            WriteOperation::UpdateAccount { account_id, balance } => self.conn.execute("UPDATE accounts SET balance = ?1 WHERE customer_id = ?2",
+                                                                                       params![balance, account_id])
                 .map(|_| ())
                 .context("failed to update account"),
-            Operation::UpdateTrade { trade_id, price } => self.conn.execute("UPDATE trades SET price = ?1 WHERE trade_id = ?2",
-                                                                            params![price, trade_id])
+            WriteOperation::UpdateTrade { trade_id, price } => self.conn.execute("UPDATE trades SET price = ?1 WHERE trade_id = ?2",
+                                                                                 params![price, trade_id])
                 .map(|_| ())
                 .context("failed to update trades"),
-            Operation::UpdateOrder { order_id, status, limit_price } => self.conn.execute("UPDATE orders SET status = ?1, limit_price = ?2 WHERE order_id = ?3",
-                                                                                          params![status, limit_price, order_id])
+            WriteOperation::UpdateOrder { order_id, status, limit_price } => self.conn.execute("UPDATE orders SET status = ?1, limit_price = ?2 WHERE order_id = ?3",
+                                                                                               params![status, limit_price, order_id])
                 .map(|_| ())
                 .context("failed to update orders"),
-            Operation::UpdateMarketData { market_data_id, price, volume } => self.conn.execute("UPDATE market_data SET price = ?1, volume = ?2, market_date = CURRENT_TIMESTAMP WHERE market_data_id = ?3",
-                                                                                               params![price, volume, market_data_id])
+            WriteOperation::UpdateMarketData { market_data_id, price, volume } => self.conn.execute("UPDATE market_data SET price = ?1, volume = ?2, market_date = CURRENT_TIMESTAMP WHERE market_data_id = ?3",
+                                                                                                    params![price, volume, market_data_id])
                 .map(|_| ())
                 .context("failed to update market_data"),
-            Operation::DeleteCustomer { customer_id } => self.conn.execute("DELETE FROM customers WHERE customer_id = ?1", params![customer_id])
+            WriteOperation::DeleteCustomer { customer_id } => self.conn.execute("DELETE FROM customers WHERE customer_id = ?1", params![customer_id])
                 .map(|_| ())
                 .context("failed to delete customer"),
-            Operation::DeleteAccount { account_id } => self.conn.execute("DELETE FROM accounts WHERE account_id = ?1", params![account_id])
+            WriteOperation::DeleteAccount { account_id } => self.conn.execute("DELETE FROM accounts WHERE account_id = ?1", params![account_id])
                 .map(|_| ())
                 .context("failed to delete accounts"),
-            Operation::DeleteSecurity { security_id } => self.conn.execute("DELETE FROM securities WHERE security_id = ?1", params![security_id])
+            WriteOperation::DeleteSecurity { security_id } => self.conn.execute("DELETE FROM securities WHERE security_id = ?1", params![security_id])
                 .map(|_| ())
                 .context("failed to delete security"),
-            Operation::DeleteTrade { trade_id } => self.conn.execute("DELETE FROM trades WHERE trade_id = ?1", params![trade_id])
+            WriteOperation::DeleteTrade { trade_id } => self.conn.execute("DELETE FROM trades WHERE trade_id = ?1", params![trade_id])
                 .map(|_| ())
                 .context("failed to delete trades"),
-            Operation::DeleteOrder { order_id } => self.conn.execute("DELETE FROM orders WHERE order_id = ?1", params![order_id])
+            WriteOperation::DeleteOrder { order_id } => self.conn.execute("DELETE FROM orders WHERE order_id = ?1", params![order_id])
                 .map(|_| ())
                 .context("failed to delete orders"),
-            Operation::DeleteMarketData { market_data_id } => self.conn.execute("DELETE FROM market_data WHERE market_data_id = ?1", params![market_data_id])
+            WriteOperation::DeleteMarketData { market_data_id } => self.conn.execute("DELETE FROM market_data WHERE market_data_id = ?1", params![market_data_id])
                 .map(|_| ())
                 .context("failed to delete market_data")
         }

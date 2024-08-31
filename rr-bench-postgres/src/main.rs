@@ -5,33 +5,54 @@ use postgres::Client;
 use postgres_openssl::MakeTlsConnector;
 use r2d2_postgres::r2d2::Pool;
 use r2d2_postgres::PostgresConnectionManager;
-use rr_bench_core::operations::Operation;
-use rr_bench_core::{benchmark, Benchmark, Config, PrimaryDatabase, ReadReplica};
+use rr_bench_core::clap::{Arg, ArgMatches};
+use rr_bench_core::operations::WriteOperation;
+use rr_bench_core::{benchmark, Benchmark, PrimaryDatabase, ReadReplica};
 
 fn main() {
-    benchmark(PostgresBenchmark::new)
+    benchmark(
+        || {
+            [
+                Arg::new("writer")
+                    .long("writer-url")
+                    .required(true)
+                    .help("The URL to the writer node"),
+                Arg::new("reader")
+                    .long("reader-url")
+                    .required(true)
+                    .help("The URL to the reader node"),
+            ]
+        },
+        PostgresBenchmark::new,
+    )
 }
 
 struct PostgresBenchmark {
-    config: Config,
+    reader_url: String,
     pool: Pool<PostgresConnectionManager<MakeTlsConnector>>,
 }
 
 impl PostgresBenchmark {
-    fn new(config: Config) -> Result<Self> {
-        let url = config
-            .get("primary-url")
-            .context("missing required parameter primary-url")?;
+    fn new(args: ArgMatches) -> Result<Self> {
+        let writer = args
+            .get_one::<String>("writer")
+            .context("missing required argument writer-url")?
+            .to_string();
+
+        let reader_url = args
+            .get_one::<String>("reader")
+            .context("missing required argument writer-url")?
+            .to_string();
 
         let mut builder =
             SslConnector::builder(SslMethod::tls()).context("Error creating ssl builder")?;
         builder.set_verify(SslVerifyMode::NONE);
         let tls = MakeTlsConnector::new(builder.build());
 
-        let manager = PostgresConnectionManager::new(url.parse().unwrap(), tls);
+        let manager = PostgresConnectionManager::new(writer.parse().unwrap(), tls);
         let pool = Pool::new(manager).context("failed to create connection pool")?;
 
-        Ok(Self { config, pool })
+        Ok(Self { reader_url, pool })
     }
 }
 
@@ -46,12 +67,7 @@ impl Benchmark<'_> for PostgresBenchmark {
     }
 
     fn read_replica(&self) -> Result<Self::Reader> {
-        let url = self
-            .config
-            .get("reader-url")
-            .context("missing required parameter reader-url")?;
-
-        PostgresClient::from_url(url)
+        PostgresClient::from_url(&self.reader_url)
     }
 }
 
@@ -166,17 +182,17 @@ impl PrimaryDatabase for PostgresPooledClient {
             .map(|row| row.get("sector"))
     }
 
-    fn execute_command(&self, op: Operation) -> Result<()> {
+    fn execute_command(&self, op: WriteOperation) -> Result<()> {
         let mut client = self
             .pool
             .get()
             .context("failed to acquire connection from pool")?;
         match op {
-            Operation::InsertCustomer { name, address } => client.execute(
+            WriteOperation::InsertCustomer { name, address } => client.execute(
                 "INSERT INTO customers (name, address) VALUES ($1, $2)", &[&name, &address])
                 .map(|_| ())
                 .context("failed to insert customer"),
-            Operation::InsertAccount { customer_id, account_type, balance, parent_account_id } => {
+            WriteOperation::InsertAccount { customer_id, account_type, balance, parent_account_id } => {
                 match parent_account_id {
                     None => {
                         client.execute("INSERT INTO accounts (customer_id, account_type, balance) VALUES ($1, $2, $3)", &[&customer_id, &account_type, &PgNumeric::new(Some(BigDecimal::try_from(balance).unwrap()))])
@@ -190,13 +206,13 @@ impl PrimaryDatabase for PostgresPooledClient {
                     }
                 }
             },
-            Operation::InsertSecurity { ticker, name, sector } => {
+            WriteOperation::InsertSecurity { ticker, name, sector } => {
                 client.execute("INSERT INTO securities (ticker, name, sector) VALUES ($1, $2, $3)", &[&ticker, &name, &sector])
                     .map(|_| ())
                     .context("failed to insert security")
             },
 
-            Operation::InsertTrade { account_id, security_id, trade_type, quantity, price, parent_trade_id } => {
+            WriteOperation::InsertTrade { account_id, security_id, trade_type, quantity, price, parent_trade_id } => {
                 match parent_trade_id {
                     None =>
                         client.execute("INSERT INTO trades (account_id, security_id, trade_type, quantity, price) VALUES ($1, $2, $3, $4, $5)", &[&account_id, &security_id, &trade_type, &quantity, &PgNumeric::new(Some(BigDecimal::try_from(price).unwrap()))])
@@ -208,7 +224,7 @@ impl PrimaryDatabase for PostgresPooledClient {
                 }
             },
 
-            Operation::InsertOrder { account_id, security_id, order_type, quantity, limit_price,  status, parent_order_id} => {
+            WriteOperation::InsertOrder { account_id, security_id, order_type, quantity, limit_price,  status, parent_order_id} => {
                 match parent_order_id  {
                     None => client
                         .execute("INSERT INTO orders (account_id, security_id, order_type, quantity, limit_price, status) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -222,58 +238,58 @@ impl PrimaryDatabase for PostgresPooledClient {
                         .context("failed to insert order"),
                 }
             },
-            Operation::InsertMarketData { security_id, price, volume } => client
+            WriteOperation::InsertMarketData { security_id, price, volume } => client
                 .execute("INSERT INTO market_data (security_id, price, volume) VALUES ($1, $2, $3)",
                          &[&security_id, &PgNumeric::new(Some(BigDecimal::try_from(price).unwrap())), &volume])
                 .map(|_| ())
                 .context("failed to insert market data"),
-            Operation::UpdateCustomer { customer_id, address } => client
+            WriteOperation::UpdateCustomer { customer_id, address } => client
                 .execute("UPDATE customers SET address = $1 WHERE customer_id = $2",&[&address, &customer_id])
                 .map(|_| ())
                 .context("failed to update customer"),
-            Operation::UpdateAccount { account_id, balance } => client
+            WriteOperation::UpdateAccount { account_id, balance } => client
                 .execute("UPDATE accounts SET balance = $1 WHERE customer_id = $2", &[
                     &PgNumeric::new(Some(BigDecimal::try_from(balance).unwrap())),
                     &account_id
                 ]).map(|_| ())
                 .context("failed to update account"),
-            Operation::UpdateTrade { trade_id, price } => client
+            WriteOperation::UpdateTrade { trade_id, price } => client
                 .execute("UPDATE trades SET price = $1 WHERE trade_id = $2", &[
                         &PgNumeric::new(Some(BigDecimal::try_from(price).unwrap())),
                     &trade_id
                 ]).map(|_| ())
                 .context("failed to update trades"),
-            Operation::UpdateOrder { order_id, status, limit_price } => client
+            WriteOperation::UpdateOrder { order_id, status, limit_price } => client
                 .execute("UPDATE orders SET status = $1, limit_price = $2 WHERE order_id = $3",&[
                         &status,
                         &PgNumeric::new(Some(BigDecimal::try_from(limit_price).unwrap())),
                         &order_id
                 ]).map(|_| ())
                 .context("failed to update orders"),
-            Operation::UpdateMarketData { .. } => Ok(()),/*client
+            WriteOperation::UpdateMarketData { .. } => Ok(()),/*client
                 .execute("UPDATE market_data SET price = $1, volume = $2, market_date = CURRENT_TIMESTAMP WHERE market_data_id = $3", &[
                             &PgNumeric::new(Some(BigDecimal::try_from(price).unwrap())),
                             &PgNumeric::new(Some(BigDecimal::try_from(volume).unwrap())),
                             &market_data_id
                 ]).map(|_| ())
                 .context("failed to update market_data"),*/
-            Operation::DeleteCustomer { customer_id } => client
+            WriteOperation::DeleteCustomer { customer_id } => client
                 .execute("DELETE FROM customers WHERE customer_id = $1", &[&customer_id])
                 .map(|_| ())
                 .context("failed to delete customer"),
-            Operation::DeleteAccount { account_id } => client.execute("DELETE FROM accounts WHERE account_id = $1", &[&account_id])
+            WriteOperation::DeleteAccount { account_id } => client.execute("DELETE FROM accounts WHERE account_id = $1", &[&account_id])
                 .map(|_| ())
                 .context("failed to delete accounts"),
-            Operation::DeleteSecurity { security_id } => client.execute("DELETE FROM securities WHERE security_id = $1", &[&security_id])
+            WriteOperation::DeleteSecurity { security_id } => client.execute("DELETE FROM securities WHERE security_id = $1", &[&security_id])
                 .map(|_| ())
                 .context("failed to delete security"),
-            Operation::DeleteTrade { trade_id } => client.execute("DELETE FROM trades WHERE trade_id = $1", &[&trade_id])
+            WriteOperation::DeleteTrade { trade_id } => client.execute("DELETE FROM trades WHERE trade_id = $1", &[&trade_id])
                 .map(|_| ())
                 .context("failed to delete trades"),
-            Operation::DeleteOrder { order_id } => client.execute("DELETE FROM orders WHERE order_id = $1", &[&order_id])
+            WriteOperation::DeleteOrder { order_id } => client.execute("DELETE FROM orders WHERE order_id = $1", &[&order_id])
                 .map(|_| ())
                 .context("failed to delete orders"),
-            Operation::DeleteMarketData { market_data_id } => client.execute("DELETE FROM market_data WHERE market_data_id = $1", &[&market_data_id])
+            WriteOperation::DeleteMarketData { market_data_id } => client.execute("DELETE FROM market_data WHERE market_data_id = $1", &[&market_data_id])
                 .map(|_| ())
                 .context("failed to delete market_data")
         }

@@ -14,7 +14,7 @@ use rusqlite::{params, Connection, Transaction};
 use serde::Serialize;
 use std::env;
 use std::fs::File;
-use std::num::{NonZero, NonZeroU8};
+use std::num::NonZeroU8;
 use std::path::PathBuf;
 use uuid::Uuid;
 

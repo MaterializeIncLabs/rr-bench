@@ -1,62 +1,67 @@
-use clap::Parser;
-use std::collections::HashMap;
+use clap::{Arg, ArgMatches, Command};
 use std::time::Duration;
 
-/// Configuration struct used to store key-value pairs passed as flags to the benchmark.
-pub struct Config(HashMap<String, String>);
+pub struct Args {
+    command: Command,
+}
 
-impl Config {
-    pub fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).map(|v| v.as_str())
+impl Args {
+    pub fn new(args: impl IntoIterator<Item = impl Into<Arg>>) -> Self {
+        let command = Command::new("rr-bench")
+            .arg(
+                Arg::new("duration")
+                    .short('d')
+                    .long("duration")
+                    .help("The duration of the benchmark (e.g., 10s, 5m, 1h)")
+                    .value_name("DURATION")
+                    .required(true)
+                    .value_parser(parse_duration)
+            )
+            .arg(
+                Arg::new("transactions_per_second")
+                    .long("transactions-per-second")
+                    .help(
+                        "The number of transactions per second to execute against the primary database",
+                    )
+                    .value_name("TPS")
+                    .default_value("10"),
+            )
+            .arg(
+                Arg::new("concurrency")
+                    .short('c')
+                    .long("concurrency")
+                    .help("The number of concurrent clients to open against the read replica")
+                    .value_name("CONCURRENCY")
+                    .default_value("1"),
+            )
+            .args(args);
+
+        Self { command }
     }
-}
 
-#[derive(Parser, Debug, Clone)]
-#[command(name = "rr-bench")]
-pub struct Cli {
-    /// The duration of the benchmark (e.g., 10s, 5m, 1h)
-    #[arg(short, long, value_parser = parse_duration_str)]
-    pub duration: Duration,
+    pub fn parse(self) -> Cli {
+        let matches = self.command.get_matches();
+        let duration = *matches.get_one::<Duration>("duration").unwrap();
+        let transactions_per_second = *matches.get_one::<u32>("transactions_per_second").unwrap();
+        let concurrency = *matches.get_one::<u32>("concurrency").unwrap();
 
-    /// The number of transactions per second
-    /// to execute against the primary database.
-    #[arg(long, default_value_t = 10)]
-    pub transactions_per_second: u32,
-
-    /// The number of concurrent clients
-    /// to open against the read replica
-    #[arg(long, short, default_value_t = 1)]
-    pub concurrency: u32,
-
-    /// Any flags passed at the end after --
-    /// will be based to the benchmark as a config.
-    /// This may be used for implementation specific
-    /// configurations.
-    #[arg(last = true)]
-    unknown_args: Vec<String>,
-}
-
-impl Cli {
-    pub fn get_config(&self) -> Config {
-        let mut iter = self.unknown_args.iter();
-        let mut unknown_flags = HashMap::new();
-        while let Some(arg) = iter.next() {
-            if let Some((key, value)) = arg.split_once('=') {
-                unknown_flags.insert(key.to_string(), value.to_string());
-            } else {
-                // Handle flags without a value (e.g., --flag)
-                let flag = arg.trim_start_matches("--");
-                if let Some(value) = iter.next() {
-                    unknown_flags.insert(flag.to_string(), value.clone());
-                }
-            }
+        Cli {
+            duration,
+            transactions_per_second,
+            concurrency,
+            matches,
         }
-
-        Config(unknown_flags)
     }
 }
 
-fn parse_duration_str(s: &str) -> Result<Duration, String> {
+fn parse_duration(s: &str) -> Result<Duration, String> {
     humantime::parse_duration(s)
         .map_err(|_| format!("Invalid duration {}. Use formats like '10s', '5m', '1h'", s))
+}
+
+pub struct Cli {
+    pub duration: Duration,
+    pub transactions_per_second: u32,
+    pub concurrency: u32,
+    pub matches: ArgMatches,
 }

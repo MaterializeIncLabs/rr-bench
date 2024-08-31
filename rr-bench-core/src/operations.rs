@@ -1,4 +1,6 @@
-pub enum Operation {
+use strum_macros::EnumIter;
+
+pub enum WriteOperation {
     InsertCustomer {
         name: String,
         address: String,
@@ -79,3 +81,24 @@ pub enum Operation {
         market_data_id: i32,
     },
 }
+
+#[derive(EnumIter)]
+pub enum ReadOperation {
+    CustomerPortfolio,
+    TopPerformers,
+    MarketOverview,
+    RecentLargeTrades,
+    CustomerOrderBook,
+    SectorPerformance,
+    AccountActivitySummary,
+    DailyMarketMovements,
+    HighValueCustomers,
+    PendingOrdersSummary,
+    TradeVolumeByHour,
+    TopSecuritiesBySector,
+    RecentTradesByAccount,
+    OrderFulfillmentRates,
+    SectorOrderActivity,
+}
+
+

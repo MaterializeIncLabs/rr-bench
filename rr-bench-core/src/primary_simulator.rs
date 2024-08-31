@@ -1,5 +1,5 @@
-use crate::task_handle::CompletionTracker;
-use crate::{Operation, PrimaryDatabase};
+use crate::task_handle::TaskCompletion;
+use crate::{WriteOperation, PrimaryDatabase};
 use anyhow::{Context, Result};
 use fake::faker::address::raw::StreetName;
 use fake::faker::company::raw::{CompanyName, Industry};
@@ -13,15 +13,18 @@ use rand::{Rng, SeedableRng};
 use std::thread::sleep;
 use std::time::Duration;
 
+const INSERT_PERCENTAGE: u32 = 45;
+const UPDATE_PERCENTAGE: u32 = 45;
+
 pub struct PrimarySimulator<DB: PrimaryDatabase> {
     db: DB,
     tps: u32,
     rng: StdRng,
-    completion_tracker: CompletionTracker,
+    completion_tracker: TaskCompletion,
 }
 
 impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
-    pub fn new(db: DB, tps: u32, seed: u64, completion_tracker: CompletionTracker) -> Self {
+    pub fn new(db: DB, tps: u32, seed: u64, completion_tracker: TaskCompletion) -> Self {
         let rng = StdRng::seed_from_u64(seed);
         PrimarySimulator {
             db,
@@ -44,27 +47,27 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
         Ok(())
     }
 
-    fn generate_operations(&mut self) -> Result<Operation> {
+    fn generate_operations(&mut self) -> Result<WriteOperation> {
         let op_type = self.rng.gen_range(0..100);
-        if op_type < 45 {
+        if op_type < INSERT_PERCENTAGE {
             self.generate_insert()
-        } else if op_type < 90 {
+        } else if op_type < UPDATE_PERCENTAGE {
             self.generate_update()
         } else {
             self.generate_delete()
         }
     }
 
-    fn generate_insert(&mut self) -> Result<Operation> {
+    fn generate_insert(&mut self) -> Result<WriteOperation> {
         let operation = match self.rng.gen_range(0..6) {
-            0 => Operation::InsertCustomer {
+            0 => WriteOperation::InsertCustomer {
                 name: Name(EN).fake_with_rng(&mut self.rng),
                 address: StreetName(EN).fake_with_rng(&mut self.rng),
             },
             1 => {
                 let customer_id = self.db.get_random_customer_id()?;
 
-                Operation::InsertAccount {
+                WriteOperation::InsertAccount {
                     customer_id,
                     account_type: ["Savings", "Checking", "Brokerage", "Investment"]
                         .choose(&mut self.rng)
@@ -74,7 +77,7 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
                     parent_account_id: None,
                 }
             }
-            2 => Operation::InsertSecurity {
+            2 => WriteOperation::InsertSecurity {
                 ticker: ticker(&mut self.rng),
                 name: CompanyName(EN).fake_with_rng(&mut self.rng),
                 sector: Industry(EN).fake_with_rng(&mut self.rng),
@@ -83,7 +86,7 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
                 let account_id = self.db.get_random_account_id()?;
                 let security_id = self.db.get_random_security_id()?;
 
-                Operation::InsertTrade {
+                WriteOperation::InsertTrade {
                     account_id,
                     security_id,
                     trade_type: ["buy", "sell"].choose(&mut self.rng).unwrap().to_string(),
@@ -96,7 +99,7 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
                 let account_id = self.db.get_random_account_id()?;
                 let security_id = self.db.get_random_security_id()?;
 
-                Operation::InsertOrder {
+                WriteOperation::InsertOrder {
                     account_id,
                     security_id,
                     order_type: ["buy", "sell"].choose(&mut self.rng).unwrap().to_string(),
@@ -112,7 +115,7 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
             _ => {
                 let security_id = self.db.get_random_security_id()?;
 
-                Operation::InsertMarketData {
+                WriteOperation::InsertMarketData {
                     security_id,
                     price: self.rng.gen_range(100.0..500.0),
                     volume: self.rng.gen_range(1000..100000),
@@ -123,32 +126,32 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
         Ok(operation)
     }
 
-    fn generate_update(&mut self) -> Result<Operation> {
+    fn generate_update(&mut self) -> Result<WriteOperation> {
         let operation = match self.rng.gen_range(0..5) {
             0 => {
                 let customer_id = self.db.get_random_customer_id()?;
-                Operation::UpdateCustomer {
+                WriteOperation::UpdateCustomer {
                     customer_id,
                     address: StreetName(EN).fake_with_rng(&mut self.rng),
                 }
             }
             1 => {
                 let account_id = self.db.get_random_account_id()?;
-                Operation::UpdateAccount {
+                WriteOperation::UpdateAccount {
                     account_id,
                     balance: self.rng.gen_range(0.0..10000.0),
                 }
             }
             2 => {
                 let trade_id = self.db.get_random_trade_id()?;
-                Operation::UpdateTrade {
+                WriteOperation::UpdateTrade {
                     trade_id,
                     price: self.rng.gen_range(100.0..500.0),
                 }
             }
             3 => {
                 let order_id = self.db.get_random_order_id()?;
-                Operation::UpdateOrder {
+                WriteOperation::UpdateOrder {
                     order_id,
                     status: ["pending", "completed", "canceled"]
                         .choose(&mut self.rng)
@@ -159,7 +162,7 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
             }
             _ => {
                 let market_data_id = self.db.get_random_market_data_id()?;
-                Operation::UpdateMarketData {
+                WriteOperation::UpdateMarketData {
                     market_data_id,
                     price: self.rng.gen_range(100.0..500.0),
                     volume: self.rng.gen_range(1000..100000) as f64,
@@ -170,24 +173,24 @@ impl<DB: PrimaryDatabase> PrimarySimulator<DB> {
         Ok(operation)
     }
 
-    fn generate_delete(&mut self) -> Result<Operation> {
+    fn generate_delete(&mut self) -> Result<WriteOperation> {
         let operation = match self.rng.gen_range(0..6) {
-            0 => Operation::DeleteCustomer {
+            0 => WriteOperation::DeleteCustomer {
                 customer_id: self.db.get_random_customer_id()?,
             },
-            1 => Operation::DeleteAccount {
+            1 => WriteOperation::DeleteAccount {
                 account_id: self.db.get_random_account_id()?,
             },
-            2 => Operation::DeleteSecurity {
+            2 => WriteOperation::DeleteSecurity {
                 security_id: self.db.get_random_security_id()?,
             },
-            3 => Operation::DeleteTrade {
+            3 => WriteOperation::DeleteTrade {
                 trade_id: self.db.get_random_trade_id()?,
             },
-            4 => Operation::DeleteOrder {
+            4 => WriteOperation::DeleteOrder {
                 order_id: self.db.get_random_order_id()?,
             },
-            _ => Operation::DeleteMarketData {
+            _ => WriteOperation::DeleteMarketData {
                 market_data_id: self.db.get_random_market_data_id()?,
             },
         };

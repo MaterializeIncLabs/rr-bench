@@ -1,20 +1,21 @@
 #![allow(clippy::needless_doctest_main)]
 
-use crate::config::Cli;
-pub use crate::config::Config;
+use crate::config::{Args, Cli};
 use crate::measurements::Measurements;
-use crate::operations::Operation;
+use crate::operations::WriteOperation;
 use crate::primary_simulator::PrimarySimulator;
 use crate::read_simulator::ReaderSimulator;
 use crate::task_handle::new_task_handles;
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Arg, ArgMatches};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::process::exit;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
 use std::time::Duration;
+
+pub use clap;
 
 mod config;
 mod measurements;
@@ -63,7 +64,7 @@ pub trait PrimaryDatabase: Send {
 
     fn get_random_sector(&mut self) -> Result<String>;
 
-    fn execute_command(&self, op: Operation) -> Result<()>;
+    fn execute_command(&self, op: WriteOperation) -> Result<()>;
 }
 
 /// The `ReadReplica` trait defines the interface for interacting with a read replica
@@ -104,27 +105,56 @@ pub trait ReadReplica: Send {
     fn cascading_order_cancellation_alert(&mut self) -> Result<()>;
 }
 
-/// The `benchmark` function runs a benchmarking test using the provided function to create a `Benchmark` instance.
+/// The `benchmark` function runs a benchmarking test using the provided closures to set up
+/// the benchmarking environment and create a `Benchmark` instance.
 ///
-/// This function sets up the benchmarking environment, spawns threads to simulate primary database writes,
-/// and read replica queries, and collects measurements over the specified duration.
+/// This function sets up the benchmarking environment, spawns threads to simulate primary
+/// database writes and read replica queries, and collects measurements over the specified duration.
 ///
 /// # Arguments
-/// * `f` - A function that takes a `Config` and returns a `Benchmark` implementation.
+///
+/// * `args` - A closure that returns an iterator of arguments, each implementing `Into<Arg>`.
+///            These arguments are for configuring the command-line interface using `clap`.
+///            Implementors can use this to add their own command-line arguments for benchmark-specific
+///            configurations.
+/// * `f` - A closure that takes an `ArgMatches` (parsed command-line arguments) and returns a
+///         `Result` containing an instance of a type that implements the `Benchmark` trait.
 ///
 /// # Example
-/// ```compile_fail
-/// fn main() {
-///     benchmark(|config| {
-///         MyBenchmark::new(config)
-///     });
+///
+/// ```no_compile
+/// use clap::{Arg, Command, ArgMatches};
+/// use std::error::Error;
+///
+/// struct MyBenchmark;
+///
+/// impl<'a> Benchmark<'a> for MyBenchmark {
+///     // Implement required methods...
+/// }
+///
+/// fn main() -> Result<(), Box<dyn Error>> {
+///     benchmark(
+///         || vec![Arg::new("config").long("config").takes_value(true).about("Sets the configuration file")],
+///         |matches: ArgMatches| {
+///             // Use matches to configure the benchmark
+///             Ok(MyBenchmark)
+///         },
+///     );
+///     Ok(())
 /// }
 /// ```
-pub fn benchmark<B: for<'a> Benchmark<'a>, F>(f: F)
+pub fn benchmark<C, I, A, B, F>(args: C, f: F)
 where
-    F: Fn(Config) -> Result<B>,
+    C: Fn() -> I,
+    I: IntoIterator<Item = A>,
+    A: Into<Arg>,
+    B: for<'a> Benchmark<'a>,
+    F: Fn(ArgMatches) -> Result<B>,
 {
-    match inner(f) {
+    let args = Args::new(args());
+    let cli = args.parse();
+
+    match inner(cli, f) {
         Ok(measurements) => println!("{}", measurements),
         Err(e) => {
             eprintln!("{:?}", e);
@@ -133,13 +163,11 @@ where
     }
 }
 
-fn inner<B: for<'a> Benchmark<'a>, F>(f: F) -> Result<Measurements>
+fn inner<B: for<'a> Benchmark<'a>, F>(cli: Cli, f: F) -> Result<Measurements>
 where
-    F: Fn(Config) -> Result<B>,
+    F: Fn(ArgMatches) -> Result<B>,
 {
-    let cli: Cli = Cli::parse();
-    let benchmark: B = f(cli.get_config())?;
-
+    let benchmark: B = f(cli.matches)?;
     let (handle, tracker) = new_task_handles();
 
     thread::scope(|s| {

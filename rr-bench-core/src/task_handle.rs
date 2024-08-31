@@ -1,13 +1,13 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-pub fn new_task_handles() -> (TaskHandle, CompletionTracker) {
+pub fn new_task_handles() -> (TaskHandle, TaskCompletion) {
     let count = Arc::new(AtomicUsize::new(1));
     (
         TaskHandle {
             count: count.clone(),
         },
-        CompletionTracker { count },
+        TaskCompletion { count },
     )
 }
 
@@ -30,11 +30,11 @@ impl Drop for TaskHandle {
     }
 }
 
-pub struct CompletionTracker {
+pub struct TaskCompletion {
     count: Arc<AtomicUsize>,
 }
 
-impl CompletionTracker {
+impl TaskCompletion {
     pub fn is_done(&self) -> bool {
         self.count.load(Ordering::SeqCst) == 0
     }
