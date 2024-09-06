@@ -1,3 +1,7 @@
+-- View definitions for the queries that will
+-- be executed against the read replica when under
+-- test.
+
 CREATE VIEW customer_portfolio AS
 SELECT c.customer_id, c.name, a.account_id, s.ticker, s.name AS security_name,
        SUM(t.quantity * t.price) AS total_value

@@ -1,3 +1,9 @@
+-- View definitions for the queries that will
+-- be executed against the Materialize instance when under
+-- test. The only difference between these queries and
+-- the ones defined in pg_views.sql is the use of
+-- mz_now() and the view indexes. 
+
 CREATE VIEW customer_portfolio AS
 SELECT c.customer_id, c.name, a.account_id, s.ticker, s.name AS security_name,
        SUM(t.quantity * t.price) AS total_value

@@ -1,3 +1,5 @@
+--- Table definitions for Postgres.
+
 CREATE TABLE customers (
     customer_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,

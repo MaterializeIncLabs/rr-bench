@@ -1,3 +1,6 @@
+-- Utilities for loading data generated
+-- by rr-data-gen binary.
+
 -- Load data into customers table
 \copy customers (customer_id, name, address, created_at)
 FROM 'data/customers.csv'
