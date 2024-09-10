@@ -135,19 +135,19 @@ CREATE TABLE market_data (
 
 1. **Customer Portfolio View**
 
-```sql
--- queries read for a single customer profile
-CREATE VIEW customer_portfolio AS
-SELECT c.customer_id, c.name, a.account_id, s.ticker, s.name AS security_name,
-       SUM(t.quantity * t.price) AS total_value
-FROM customers c
-JOIN accounts a ON c.customer_id = a.customer_id
-JOIN trades t ON a.account_id = t.account_id
-JOIN securities s ON t.security_id = s.security_id
-GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
-```
+    ```sql
+    -- queries read for a single customer profile
+    CREATE VIEW customer_portfolio AS
+    SELECT c.customer_id, c.name, a.account_id, s.ticker, s.name AS security_name,
+           SUM(t.quantity * t.price) AS total_value
+    FROM customers c
+    JOIN accounts a ON c.customer_id = a.customer_id
+    JOIN trades t ON a.account_id = t.account_id
+    JOIN securities s ON t.security_id = s.security_id
+    GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
+    ```
 
-1. **Top Performers View**
+2. **Top Performers View**
     
     ```sql
     -- queries return the full set of top performers
@@ -166,7 +166,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     
     ```
     
-2. **Market Overview View**
+3. **Market Overview View**
     
     ```sql
     CREATE VIEW market_overview AS
@@ -179,7 +179,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     
     ```
     
-3. **Recent Large Trades View**
+4. **Recent Large Trades View**
     
     ```sql
     -- queries search for large trades by account_id
@@ -192,7 +192,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
       AND t.trade_date + INTERVAL '1 hour' > now();
     ```
     
-4. **Customer Order Book**
+5. **Customer Order Book**
     
     ```sql
     -- queries search for orders books by customer_id
@@ -206,7 +206,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     
     ```
     
-5. **Sector Performance**
+6. **Sector Performance**
     
     ```sql
     CREATE VIEW sector_performance AS
@@ -218,7 +218,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     
     ```
     
-6. **Account Activity Summary**
+7. **Account Activity Summary**
     
     ```sql
     -- queries select rows byased on account_id
@@ -231,7 +231,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     GROUP BY a.account_id;
     ```
     
-7. **Daily Market Movements**
+8. **Sector Performance**
     
     ```sql
     -- queries select rows based on sector
@@ -243,7 +243,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     GROUP BY s.sector;
     ```
     
-8. **High-Value Customers**
+9. **High-Value Customers**
     
     ```sql
     -- returns all rows
@@ -255,7 +255,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     HAVING SUM(a.balance) > 1000000;
     ```
     
-9. **Pending Orders Summary**
+10. **Pending Orders Summary**
     
     ```sql
     -- queries result based on ticker
@@ -269,7 +269,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     GROUP BY s.ticker, s.name;
     ```
     
-10. **Trade Volume by Hour**
+11. **Trade Volume by Hour**
     
     ```sql
     -- queries return all rows
@@ -281,7 +281,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     GROUP BY EXTRACT(HOUR FROM t.trade_date);
     ```
     
-11. **Top Securities by Sector**
+12. **Top Securities by Sector**
     
     ```sql
     -- queries rows based on sector
@@ -299,7 +299,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     );
     ```
     
-12. **Recent Trades by Account**
+13. **Recent Trades by Account**
     
     ```sql
     -- queries rows based on account id
@@ -311,7 +311,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     WHERE t.trade_date + INTERVAL '1 day'> now();
     ```
     
-13. **Order Fulfillment Rates**
+14. **Order Fulfillment Rates**
     
     ```sql
     -- queries rows based on customer_id
@@ -326,7 +326,7 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     GROUP BY c.customer_id, c.name;
     ```
     
-14. **Sector-wise Order Activity**
+15. **Sector-wise Order Activity**
     
     ```sql
     -- queries rows based on sector
@@ -340,38 +340,38 @@ GROUP BY c.customer_id, c.name, a.account_id, s.ticker, s.name;
     ```
     
 
-1. Daily Market Movements
+16. **Daily Market Movements**
 
-```sql
--- queries rows based on security_id
-CREATE VIEW daily_market_movements AS
-WITH last_two_days AS (
-    SELECT grp.security_id, price, market_date
-    FROM (SELECT DISTINCT security_id FROM market_data) grp,
-        LATERAL (
-            SELECT md.security_id, md.price, md.market_date
-            FROM market_data md
-            WHERE md.security_id = grp.security_id AND md.market_date + INTERVAL '1 day' > now()
-            ORDER BY md.market_date DESC
-            LIMIT 2
-        )
-),
-
-stg AS (
-    SELECT security_id, today.price AS current_price, yesterday.price AS previous_price, today.market_date
-    FROM last_two_days today
-    LEFT JOIN last_two_days yesterday USING (security_id)
-    WHERE today.market_date > yesterday.market_date
-)
-
-SELECT
-    security_id,
-    ticker,
-    name,
-    current_price,
-    previous_price,
-    current_price - previous_price AS price_change,
-    market_date
-FROM stg
-JOIN securities USING (security_id);
-```
+    ```sql
+    -- queries rows based on security_id
+    CREATE VIEW daily_market_movements AS
+    WITH last_two_days AS (
+        SELECT grp.security_id, price, market_date
+        FROM (SELECT DISTINCT security_id FROM market_data) grp,
+            LATERAL (
+                SELECT md.security_id, md.price, md.market_date
+                FROM market_data md
+                WHERE md.security_id = grp.security_id AND md.market_date + INTERVAL '1 day' > now()
+                ORDER BY md.market_date DESC
+                LIMIT 2
+            )
+    ),
+    
+    stg AS (
+        SELECT security_id, today.price AS current_price, yesterday.price AS previous_price, today.market_date
+        FROM last_two_days today
+        LEFT JOIN last_two_days yesterday USING (security_id)
+        WHERE today.market_date > yesterday.market_date
+    )
+    
+    SELECT
+        security_id,
+        ticker,
+        name,
+        current_price,
+        previous_price,
+        current_price - previous_price AS price_change,
+        market_date
+    FROM stg
+    JOIN securities USING (security_id);
+    ```
