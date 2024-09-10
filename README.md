@@ -5,7 +5,7 @@ in database systems under a variety of simulated workloads. The benchmark focuse
 the effectiveness of read replicas in handling complex read operations, ensuring data freshness,
 and maintaining performance under load.
 
-The full benchmark specification is available on [notion](https://www.notion.so/materialize/Read-Replica-Benchmark-90b60e455ba648c3a8c9a53297d09492).
+See the full [benchmark specification](SPECIFICATION.md) for more details.
 
 This repository is organized as a Cargo workspace containing three crates:
 
