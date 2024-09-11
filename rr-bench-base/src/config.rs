@@ -1,4 +1,4 @@
-use clap::{Arg, ArgMatches, Command, value_parser};
+use clap::{value_parser, Arg, ArgMatches, Command};
 use std::time::Duration;
 
 pub struct Args {
