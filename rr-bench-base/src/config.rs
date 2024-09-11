@@ -1,4 +1,4 @@
-use clap::{Arg, ArgMatches, Command};
+use clap::{Arg, ArgMatches, Command, value_parser};
 use std::time::Duration;
 
 pub struct Args {
@@ -24,7 +24,8 @@ impl Args {
                         "The number of transactions per second to execute against the primary database",
                     )
                     .value_name("TPS")
-                    .default_value("10"),
+                    .default_value("10")
+                    .value_parser(value_parser!(u32)),
             )
             .arg(
                 Arg::new("concurrency")
@@ -32,7 +33,8 @@ impl Args {
                     .long("concurrency")
                     .help("The number of concurrent clients to open against the read replica")
                     .value_name("CONCURRENCY")
-                    .default_value("1"),
+                    .default_value("1")
+                    .value_parser(value_parser!(u32)),
             )
             .args(args);
 
